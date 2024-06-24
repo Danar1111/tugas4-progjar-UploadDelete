@@ -97,14 +97,9 @@ if __name__ == '__main__':
 
     remote_upload('cek.txt')
     remote_upload('pokijan.jpg')
- #   remote_upload('rfc2616.pdf')
-    
     remote_get('cek.txt')
 #    remote_get('pokijan.jpg')
-
     remote_list()
-
 #    remote_delete('pokijan.jpg')
 #    remote_delete('cek.txt')
-
     remote_list()
