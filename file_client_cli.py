@@ -3,7 +3,7 @@ import json
 import base64
 import logging
 
-server_address=('0.0.0.0',7777)
+server_address = ('0.0.0.0', 8080)
 
 def send_command(command_str=""):
     global server_address
@@ -11,61 +11,30 @@ def send_command(command_str=""):
     sock.connect(server_address)
     logging.warning(f"connecting to {server_address}")
     try:
-        logging.warning(f"sending message ")
+        logging.warning(f"sending message")
         sock.sendall(command_str.encode())
-        # Look for the response, waiting until socket is done (no more data)
-        data_received="" #empty string
+        data_received = ""
         while True:
-            #socket does not receive all data at once, data comes in part, need to be concatenated at the end of process
-            data = sock.recv(16)
+            data = sock.recv(4096)
             if data:
-                #data is not empty, concat with previous content
                 data_received += data.decode()
                 if "\r\n\r\n" in data_received:
                     break
             else:
-                # no more data, stop the process by break
                 break
-        # at this point, data_received (string) will contain all data coming from the socket
-        # to be able to use the data_received as a dict, need to load it using json.loads()
         hasil = json.loads(data_received)
         logging.warning("data received from server:")
         return hasil
-    except:
-        logging.warning("error during data receiving")
+    except Exception as e:
+        logging.warning(f"error during data receiving: {e}")
         return False
-
-def remote_upload(filename=""):
-    try:
-        with open(filename, 'rb') as f:
-            file_content = base64.b64encode(f.read()).decode()
-        command_str = f"UPLOAD {filename} {file_content}"
-        hasil = send_command(command_str)
-        if hasil['status'] == 'OK':
-            print(hasil['data'])
-            return True
-        else:
-            print("Failed")
-            return False
-          
-    except FileNotFoundError:
-        print(f"File {filename} is not found")
-        return False
-
-def remote_delete(filename=""):
-    command_str = f"DELETE {filename}"
-    hasil = send_command(command_str)
-    if hasil['status'] == 'OK':
-        print(hasil['data'])
-        return True
-    else:
-        print("Failed")
-        return False
+    finally:
+        sock.close()
 
 def remote_list():
-    command_str=f"LIST"
+    command_str = "LIST"
     hasil = send_command(command_str)
-    if (hasil['status']=='OK'):
+    if hasil['status'] == 'OK':
         print("daftar file : ")
         for nmfile in hasil['data']:
             print(f"- {nmfile}")
@@ -75,31 +44,73 @@ def remote_list():
         return False
 
 def remote_get(filename=""):
-    command_str=f"GET {filename}"
+    command_str = f"GET {filename}"
     hasil = send_command(command_str)
-    if (hasil['status']=='OK'):
-        #proses file dalam bentuk base64 ke bentuk bytes
-        namafile= hasil['data_namafile']
+    if hasil['status'] == 'OK':
+        namafile = hasil['data_namafile']
         isifile = base64.b64decode(hasil['data_file'])
-        fp = open(namafile,'wb+')
-        fp.write(isifile)
-        fp.close()
+        with open(namafile, 'wb+') as fp:
+            fp.write(isifile)
         return True
     else:
         print("Gagal")
         return False
 
+def remote_upload(filename="", chunk_size=4096):
+    try:
+        with open(filename, 'rb') as fp:
+            while True:
+                chunk = fp.read(chunk_size)
+                if not chunk:
+                    break
+                filedata = base64.b64encode(chunk).decode()
+                command_str = f"UPLOAD {filename} {filedata}"
+                hasil = send_command(command_str)
+                if hasil['status'] != 'OK':
+                    print("Upload gagal")
+                    return False
+        print("Upload berhasil")
+        return True
+    except FileNotFoundError:
+        print("File tidak ditemukan")
+        return False
+
+def remote_delete(filename=""):
+    command_str = f"DELETE {filename}"
+    hasil = send_command(command_str)
+    if hasil['status'] == 'OK':
+        print("Hapus berhasil")
+        return True
+    else:
+        print("Hapus gagal")
+        return False
 
 if __name__ == '__main__':
     server_address = ('172.16.16.101', 8080)
+    
+    while True:
+        print("\nPilihan:")
+        print("1. List - remote_list()")
+        print("2. Upload - remote_upload('namafile')")
+        print("3. Delete - remote_delete('namafile')")
+        print("4. Get - remote_get('namafile')")
+        print("5. Keluar dari program")
 
-    remote_list()
+        pilihan = input("Masukkan pilihan (1/2/3/4/5): ")
 
-    remote_upload('cek.txt')
-    remote_upload('pokijan.jpg')
-    remote_get('cek.txt')
-#    remote_get('pokijan.jpg')
-    remote_list()
-#    remote_delete('pokijan.jpg')
-#    remote_delete('cek.txt')
-    remote_list()
+        if pilihan == '1':
+            remote_list()
+        elif pilihan == '2':
+            filename = input("Masukkan nama file untuk diupload: ")
+            remote_upload(filename)
+        elif pilihan == '3':
+            filename = input("Masukkan nama file untuk dihapus: ")
+            remote_delete(filename)
+        elif pilihan == '4':
+            filename = input("Masukkan nama file untuk diunduh: ")
+            remote_get(filename)
+        elif pilihan == '5':
+            print("Keluar dari program.")
+            break
+        else:
+            print("Pilihan tidak valid. Masukkan angka 1 sampai 5.")
